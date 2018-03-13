@@ -58,11 +58,11 @@ function Cow(initialbcs, intialliveweight, seasonlength)
         zeros(365)
         )
     for day=1:365
-        cow.max_milk_energy[day] = energy(Milk, cow, day, true)
-        cow.base_lipid_change[day] = changeliveweight(Lipid, cow, day)
+        cow.max_milk_energy[day]            = energy(Milk, cow, day, true)
+        cow.base_lipid_change[day]          = changeliveweight(Lipid, cow, day)
         cow.milk_conversion_efficiency[day] = kgmsperME(1.0, cow, day)
-        cow.energy_pregnancy[day] = energy(Pregnancy, cow, day)
-        cow.liveweight_growth[day] = changeliveweight(Growth, cow, day)
+        cow.energy_pregnancy[day]           = energy(Pregnancy, cow, day)
+        cow.liveweight_growth[day]          = changeliveweight(Growth, cow, day)
     end
     cow.base_liveweight_change[1] = changeliveweight(Pregnancy, cow, 1) + cow.base_lipid_change[1] + cow.liveweight_growth[1]
     for day=2:365
@@ -378,12 +378,12 @@ function updateday!(cow::Cow, day::Int, bcs::Float64, maintenance::Float64, isla
     herbage_intake  = herbageintake(cow, day, liveweight, herbage.food, herbage.quantity, energy_required, supplementation.quantity)
     net_energy   = herbage_intake * herbage.food.metabolisableenergy + supplementation.quantity * supplementation.food.metabolisableenergy - energy_required
 
-    allocated_to_milk = 0.
+    allocated_to_milk = 0.0
     if islactating
         max_milk_me = energy_milk                          # Can work out what energy we 'want' to spend on milk (maximum)
-        if net_energy  > 0
+        if net_energy  > 0.0
             # Positive energy balance even with max milk
-            allocated_to_milk = 0.
+            allocated_to_milk = 0.0
         elseif net_energy  < -(max_milk_me + abs(energy_lipid))
             # We have such a negative energy balance that we can't afford to make any milk
             allocated_to_milk = -max_milk_me
@@ -398,41 +398,6 @@ function updateday!(cow::Cow, day::Int, bcs::Float64, maintenance::Float64, isla
     milksolids  = (energy_milk + allocated_to_milk) * cow.milk_conversion_efficiency[day]
 
     return bcs + change_bcs, maintenance, herbage_intake, supplementation.quantity, milksolids
-end
-
-function summaryresults(c::Cow, bcs, maintenance, herbage, supplement, supplementationplan, herbageplan, lactationlength, milk_price, supplement_price)
-    results = Dict{Symbol, Float64}(
-        :finalbcs           => 0.0,
-        :lactationlength    => lactationlength,
-        :quantityherbage    => 0.0,
-        :quantitysupplement => 0.0,
-        :feedimported       => 0.0,
-        :milksolids         => 0.0,
-        :milkprofit         => 0.0,
-        :supplementcosts    => 0.0,
-        :netprofit          => 0.0
-    )
-
-    t = 1
-    for week=1:52
-        supplement.quantity = supplementationplan[week]
-        herbage.quantity = herbageplan[week]
-        for day=1:7
-            bcs, maintenance, herbage_intake, supplement_intake, milk_solids = updateday!(c, t, bcs, maintenance, week <= lactationlength, supplement, herbage)
-            t += 1
-            results[:quantityherbage] += herbage_intake
-            results[:quantitysupplement] += supplement_intake
-            results[:milksolids] += milk_solids
-        end
-    end
-
-    results[:finalbcs] = bcs
-    results[:feedimported] = results[:quantitysupplement] / (results[:quantitysupplement] + results[:quantityherbage])
-    results[:milkprofit] = results[:milksolids] * milk_price
-    results[:supplementcosts] = results[:quantitysupplement] * supplement_price
-    results[:netprofit] = results[:milkprofit] - results[:supplementcosts]
-
-    results
 end
 
 function monthlytoweekly(x::Vector{Float64}, date::Dates.Date)
@@ -470,6 +435,59 @@ function interpolate(x::Vector{Float64}, date::Dates.Date, reference_day=15)
     lambda = (date - left_date).value / (right_date - left_date).value
 
     return (1 - lambda) * x[Dates.month(left_date)] + lambda * x[Dates.month(right_date)]
+end
+
+function summarize(bcs, maintenance, u_supplement, u_herbage, u_lactation)
+    cow             = ECow.Cow()
+    feed_supplement = [ECow.FoodOffer(ECow.PKE(), y) for y in u_supplement]
+    feed_herbage    = [ECow.FoodOffer(ECow.Pasture(), y) for y in u_herbage]
+    lactation       = [y > 0.5 for y in u_lactation]
+
+    results = Dict{Symbol, Any}(
+        # ===== states =====
+        :bcs           => Float64[],
+        :maintenance   => Float64[],
+        :lactation     => Float64[],
+        :cover         => Float64[],
+        # ==== controls ====
+        :supplement    => Float64[],
+        :herbage       => Float64[],
+        # ===== profit =====
+        :milksolids    => Float64[]
+    )
+
+    t = 1
+    for week in 1:52
+        supplement   = feed_supplement[week]
+        herbage      = feed_herbage[week]
+        is_lactating = lactation[week]
+        for day in 1:7
+            bcs, maintenance, h, s, ms = updateday!(
+                cow,
+                t,
+                bcs,
+                maintenance,
+                is_lactating,
+                supplement,
+                herbage
+            )
+            t += 1
+            push!(results[:bcs], bcs)
+            push!(results[:maintenance], maintenance)
+            push!(results[:lactation], is_lactating)
+            push!(results[:supplement], s)
+            push!(results[:herbage], h)
+            push!(results[:milksolids], ms)
+        end
+    end
+
+    results[:final_bcs]        = results[:bcs][end]
+    results[:total_herbage]    = sum(results[:herbage])
+    results[:total_supplement] = sum(results[:supplement])
+    results[:total_milksolids] = sum(results[:milksolids])
+    results[:feed_imported]    = results[:total_supplement] / (results[:total_supplement] + results[:total_herbage])
+
+    results
 end
 
 end

@@ -150,17 +150,21 @@ function buildMOO(params)
             return -bcs_penalty - cover_penalty
         end)
 
-        constraints!(sp, (x, u, w) -> begin
-            # dry-off decision is permanent
-            x[lactation] + 0.5 >= u[newlactation]
-        end)
+        constraints!(sp, (x, u, w) -> all([
+                # dry-off decision is permanent
+                x[lactation] + 0.5 >= u[newlactation],
+                # maximum lactation length
+                t < 40 || u[lactation] < 0.5
+            ])
+        )
+
     end
 end
 
 
 if length(ARGS) > 0
     if ARGS[1] == "generate"
-        papamoa = [
+        papamoa = 0.8 * [
             50.0, 55.0, 45.0, 41.0, 31.0, 19.0, 19.0, 30.0, 47.0, 74.0, 63.0, 50.0
         ]
         params = Dict(
@@ -181,7 +185,7 @@ if length(ARGS) > 0
             "max_cover"                   => 3500.0,
             "initial_cover"               => 2500.0,
             "min_cover"                   => 1500.0,
-            "min_penalty"                 => 100.0,
+            "min_penalty"                 => 2.0,
             # ============= PKE ============
             "supplement_price"            => 0.5,
             # ============ cows ============
@@ -230,6 +234,15 @@ if length(ARGS) > 0
         open(ARGS[3], "w") do io
             write(io, JSON.json(results))
         end
+
+        summary = ECow.summarize(
+            parse(Float64, ARGS[4]),
+            parse(Float64, ARGS[5]),
+            results[:supplement],
+            results[:herbage],
+            results[:lactation]
+        )
+        println(summary)
     else
         error("Unknown args $(ARGS)")
     end
