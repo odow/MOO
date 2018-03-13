@@ -60,7 +60,7 @@ function Cow(initialbcs, intialliveweight, seasonlength)
     for day=1:365
         cow.max_milk_energy[day] = energy(Milk, cow, day, true)
         cow.base_lipid_change[day] = changeliveweight(Lipid, cow, day)
-        cow.milk_conversion_efficiency[day] = kgmsperME(1., cow, day)
+        cow.milk_conversion_efficiency[day] = kgmsperME(1.0, cow, day)
         cow.energy_pregnancy[day] = energy(Pregnancy, cow, day)
         cow.liveweight_growth[day] = changeliveweight(Growth, cow, day)
     end
@@ -70,7 +70,7 @@ function Cow(initialbcs, intialliveweight, seasonlength)
     end
     return cow
 end
-Cow() = Cow(3.2, 460., 280)
+Cow() = Cow(3.2, 460.0, 280)
 
 """
 A type for holding Food related parameters
@@ -110,7 +110,7 @@ function kgain(cow::Cow, islactating::Bool)
 end
 
 # Adjust the milking potential of cow by age
-const age_adj_vals = [0., 0., 0.75, 0.87, 0.95, 1., 1., 1., 1., 0.97, 0.92]
+const age_adj_vals = [0.0, 0.0, 0.75, 0.87, 0.95, 1.0, 1.0, 1.0, 1.0, 0.97, 0.92]
 """
 Adjust the milk curve for the cow based on age at end of season
 """
@@ -183,7 +183,7 @@ function energy(::Type{Maintenance}, cow::Cow, pasture::Feed, liveweight, actual
     b2 = 0.05 * pasture.terrainfactor / ((3 + pasture.greenforage) * km(cow))
     return b0 * liveweight^0.75 + b1 * actualherbageintake * liveweight + b2 * liveweight + 0.1 * actualmilkproduction
 end
-const ageliveweightadjustment = [0., 0., 0.85, 0.92, 0.96, 1., 1., 1.]
+const ageliveweightadjustment = [0.0, 0.0, 0.85, 0.92, 0.96, 1.0, 1.0, 1.0]
 function changeliveweight(::Type{Growth}, cow::Cow, t::Int)
     return (ageliveweightadjustment[cow.age]* cow.matureliveweight - cow.initialliveweight) / 365
 end
@@ -402,15 +402,15 @@ end
 
 function summaryresults(c::Cow, bcs, maintenance, herbage, supplement, supplementationplan, herbageplan, lactationlength, milk_price, supplement_price)
     results = Dict{Symbol, Float64}(
-        :finalbcs           => 0.,
+        :finalbcs           => 0.0,
         :lactationlength    => lactationlength,
-        :quantityherbage    => 0.,
-        :quantitysupplement => 0.,
-        :feedimported       => 0.,
-        :milksolids         => 0.,
-        :milkprofit         => 0.,
-        :supplementcosts    => 0.,
-        :netprofit          => 0.
+        :quantityherbage    => 0.0,
+        :quantitysupplement => 0.0,
+        :feedimported       => 0.0,
+        :milksolids         => 0.0,
+        :milkprofit         => 0.0,
+        :supplementcosts    => 0.0,
+        :netprofit          => 0.0
     )
 
     t = 1
