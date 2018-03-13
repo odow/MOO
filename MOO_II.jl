@@ -93,6 +93,10 @@ function buildMOO(params)
             lactation    = [0, 1]
             # average pasture cover kg/Ha
             pasturecover = params["pasturecover_discretization"]
+            # stocking rate
+            stockingrate = 2.5:0.5:4.5
+            # feed in storage
+            storage      = 0:200:10_000
         end)
 
         @controls!(sp, begin
@@ -122,13 +126,15 @@ function buildMOO(params)
                 params["max_cover"],
                 x[pasturecover] +
                     params["daysperstage"] * params["grass_growth"][t] -
-                    params["stocking_rate"] * pasture_eaten
+                    x[stockingrate] * pasture_eaten
             )
+            y[stockingrate] = x[stockingrate]
+            y[storage]      = x[storage] - u[supplement] * params["daysperstage"] * x[stockingrate]
 
             # return the stage-objective
-            return params["stocking_rate"] * (
+            return x[stockingrate] * (
                     params["milk_price"] * milk_produced -
-                    params["supplement_price"] * params["daysperstage"] * u[supplement] -
+                    # params["supplement_price"] * params["daysperstage"] * u[supplement] -
                     params["daysperstage"] * FEIpenalty(u[supplement])
                 ) -
                 params["min_penalty"] * max(
@@ -139,7 +145,7 @@ function buildMOO(params)
 
         terminalobjective!(sp, (x) -> begin
             # Set the objective of the final stage
-            bcs_penalty = params["stocking_rate"] * params["bcs_penalty"] * max(
+            bcs_penalty = x[stockingrate] * params["bcs_penalty"] * max(
                 0.0,
                 params["initial_bcs"] - x[bcs]
             )
@@ -154,7 +160,9 @@ function buildMOO(params)
                 # dry-off decision is permanent
                 x[lactation] + 0.5 >= u[newlactation],
                 # maximum lactation length
-                t < 40 || u[lactation] < 0.5
+                t < 40 || u[lactation] < 0.5,
+                # cannot feed supplement we don't have
+                u[supplement] * params["daysperstage"] * x[stockingrate] <= x[storage]
             ])
         )
 
@@ -172,11 +180,11 @@ if length(ARGS) > 0
             "stages"                      => 52,
             "daysperstage"                => 7,
             # =========== states ===========
-            "bcs_discretization"          => 2.5:0.025:4.0,
+            "bcs_discretization"          => 2.5:0.1:4.0,
             "maintenance_discretization"  => 40.0:5:90.0,
-            "pasturecover_discretization" => 1500.0:50.0:3500.0,
+            "pasturecover_discretization" => 1500.0:200.0:3500.0,
             # ========== controls ==========
-            "supplement_discretization"   => 0:0.5:10,
+            "supplement_discretization"   => 0:1.0:6,
             "herbage_discretization"      => 0:5.0:50 ,
             # =========== pasture ==========
             # growth per stage (kg/Ha/Week)
