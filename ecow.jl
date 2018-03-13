@@ -435,4 +435,41 @@ function summaryresults(c::Cow, bcs, maintenance, herbage, supplement, supplemen
     results
 end
 
+function monthlytoweekly(x::Vector{Float64}, date::Dates.Date)
+    @assert length(x) == 12 # check we have monthly data
+    weekly_growth   = zeros(52)
+    number_readings = zeros(Int, 52)
+    for i=1:52
+        for j=1:7
+            weekly_growth[i] += interpolate(x, date)
+            number_readings[i] += 1
+            date += Dates.Day(1)
+        end
+    end
+    weekly_growth ./ number_readings
+end
+
+function interpolate(x::Vector{Float64}, date::Dates.Date, reference_day=15)
+    year, month, day = Dates.year(date), Dates.month(date), Dates.day(date)
+    left_year, right_year = year, year
+    left_month, right_month = if day < reference_day
+        max(1, month-1), month
+    else
+        month, min(12, month+1)
+    end
+    if day <= reference_day && month == 1
+        left_year  = year - 1
+        left_month = 12
+    elseif day >= reference_day && month==12
+        right_year  = year + 1
+        right_month = 1
+    end
+    left_date  = Dates.Date(left_year, left_month, reference_day)
+    right_date = Dates.Date(right_year, right_month, reference_day)
+
+    lambda = (date - left_date).value / (right_date - left_date).value
+
+    return (1 - lambda) * x[Dates.month(left_date)] + lambda * x[Dates.month(right_date)]
+end
+
 end
