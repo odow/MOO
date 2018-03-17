@@ -164,7 +164,7 @@ end
 
 if length(ARGS) > 0
     if ARGS[1] == "generate"
-        papamoa = 0.8 * [
+        papamoa = 0.764 * [
             50.0, 55.0, 45.0, 41.0, 31.0, 19.0, 19.0, 30.0, 47.0, 74.0, 63.0, 50.0
         ]
         params = Dict(
