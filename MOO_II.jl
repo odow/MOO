@@ -84,6 +84,8 @@ function buildMOO(params)
             end
         end
 
+        max_supplement(t) = -1.0 * maximum(params["supplement_discretization"]) * params["daysperstage"] * (t - 53)
+
         @states!(sp, begin
             # the body condition state (US BCS Units)
             bcs          = params["bcs_discretization"]
@@ -94,9 +96,9 @@ function buildMOO(params)
             # average pasture cover kg/Ha
             pasturecover = params["pasturecover_discretization"]
             # stocking rate
-            stockingrate = 2.5:0.5:4.5
-            # feed in storage
-            storage      = 0:200:10_000
+            stockingrate = 2.0:0.5:4.0
+            # feed in storage (multiplier)
+            storagemultiplier = linspace(0.0, 1.0, 51)
         end)
 
         @controls!(sp, begin
@@ -129,13 +131,19 @@ function buildMOO(params)
                     x[stockingrate] * pasture_eaten
             )
             y[stockingrate] = x[stockingrate]
-            y[storage]      = x[storage] - u[supplement] * params["daysperstage"] * x[stockingrate]
+            # calculate maximum supplement in previous stage
+            y[storagemultiplier] = min(
+                1.0,
+                (x[storagemultiplier] * max_supplement(t-1) - params["daysperstage"] * u[supplement]) / max_supplement(t)
+            )
 
             # return the stage-objective
             return x[stockingrate] * (
                     params["milk_price"] * milk_produced -
                     # params["supplement_price"] * params["daysperstage"] * u[supplement] -
-                    params["daysperstage"] * FEIpenalty(u[supplement])
+                    params["daysperstage"] * FEIpenalty(u[supplement]) -
+                    params["bcs_penalty"] * max(0.0, y[bcs] - 3.75) -
+                    params["bcs_penalty"] * max(0.0, 2.5 - y[bcs])
                 ) -
                 params["min_penalty"] * max(
                     0.0,
@@ -162,7 +170,7 @@ function buildMOO(params)
                 # maximum lactation length
                 t < 40 || u[lactation] < 0.5,
                 # cannot feed supplement we don't have
-                u[supplement] * params["daysperstage"] * x[stockingrate] <= x[storage]
+                params["daysperstage"] * u[supplement] <= x[storagemultiplier] * max_supplement(t-1)
             ])
         )
 
@@ -172,7 +180,7 @@ end
 
 if length(ARGS) > 0
     if ARGS[1] == "generate"
-        papamoa = 0.8 * [
+        papamoa = 0.764 * [
             50.0, 55.0, 45.0, 41.0, 31.0, 19.0, 19.0, 30.0, 47.0, 74.0, 63.0, 50.0
         ]
         params = Dict(
@@ -180,9 +188,9 @@ if length(ARGS) > 0
             "stages"                      => 52,
             "daysperstage"                => 7,
             # =========== states ===========
-            "bcs_discretization"          => 2.5:0.1:4.0,
+            "bcs_discretization"          => 2.5:0.05:4.0,
             "maintenance_discretization"  => 40.0:5:90.0,
-            "pasturecover_discretization" => 1500.0:200.0:3500.0,
+            "pasturecover_discretization" => 1500.0:100.0:3500.0,
             # ========== controls ==========
             "supplement_discretization"   => 0:1.0:6,
             "herbage_discretization"      => 0:5.0:50 ,
@@ -193,7 +201,7 @@ if length(ARGS) > 0
             "max_cover"                   => 3500.0,
             "initial_cover"               => 2500.0,
             "min_cover"                   => 1500.0,
-            "min_penalty"                 => 2.0,
+            "min_penalty"                 => 500.0,
             # ============= PKE ============
             "supplement_price"            => 0.5,
             # ============ cows ============
@@ -227,31 +235,35 @@ if length(ARGS) > 0
         end
     elseif ARGS[1] == "simulate"
         @assert length(ARGS) == 7
+        mkdir("results")
         # load model
         m = open(ARGS[2], "r") do io
             deserialize(io)
         end
-        # Simulate the policy
-        results = simulate(m,
-            1,
-            bcs          = parse(Float64, ARGS[4]),
-            maintenance  = parse(Float64, ARGS[5]),
-            lactation    = parse(Float64, ARGS[6]),
-            pasturecover = parse(Float64, ARGS[7])
-        )
-        # open(ARGS[3], "w") do io
-        #     write(io, JSON.json(results))
-        # end
 
-        summary = ECow.summarize(
-            parse(Float64, ARGS[4]),
-            parse(Float64, ARGS[5]),
-            results[:supplement],
-            results[:herbage],
-            results[:lactation]
-        )
-        open(ARGS[3], "w") do io
-            write(io, JSON.json(summary))
+        for stockingrate in 2.0:0.05:4.0
+            for storage in 0.0:0.02:1.0
+                # Simulate the policy
+                results = simulate(m,
+                    1,
+                    bcs          = parse(Float64, ARGS[4]),
+                    maintenance  = parse(Float64, ARGS[5]),
+                    lactation    = parse(Float64, ARGS[6]),
+                    pasturecover = parse(Float64, ARGS[7]),
+                    stockingrate = stockingrate,
+                    storagemultiplier = storage
+                )
+                summary = ECow.summarize(
+                    parse(Float64, ARGS[4]),
+                    parse(Float64, ARGS[5]),
+                    results[:supplement],
+                    results[:herbage],
+                    results[:lactation]
+                )
+                open("results/$(stockingrate)_$(storage)_$(ARGS[3])", "w") do io
+                    write(io, JSON.json(summary))
+                end
+            end
         end
     else
         error("Unknown args $(ARGS)")
