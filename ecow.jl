@@ -126,7 +126,7 @@ solidspercentage(cow::Cow, t::Int) = (fat(cow, t) + protein(cow, t)) / 100
 """
 kgMS produced per MJ of ME set aside for milk production
 """
-kgmsperME(ME::Float64, cow::Cow, t::Int) = ME / MEperlitre(cow, t) * solidspercentage(cow, t)
+kgmsperME(ME::Float64, cow::Cow, t::Int) = 1.23 * ME / MEperlitre(cow, t) * solidspercentage(cow, t)
 """
 Wilmink fat curve for cow
     % Fat composition (0-100%)
