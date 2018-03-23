@@ -84,7 +84,7 @@ struct Feed
 end
 # Some common values
 Pasture() = Feed(0.85, 10.3, 0.44, 1.0, 1.5)
-PKE() = Feed(0.8, 10.3, 0.44, 1.0, 1.5)
+PKE() = Feed(0.8, 11.5, 0.44, 1.0, 1.5)
 
 struct FoodOffer
     food::Feed
@@ -95,7 +95,7 @@ end
 From here on down are internal helper methods
 """
 
-const MEDIET = 10.3 # Kludgy hack for now
+const MEDIET = 0.75 * 10.3 + 0.25 * 11.5 # Kludgy hack for now
 # Efficiency of ME utilisation for milk synthesis
 kl(cow::Cow) = 0.02 * MEDIET + 0.4
 # Efficiency of ME utilisation for maintenance
@@ -154,7 +154,7 @@ output: MJ/day
 """
 function energy(::Type{Milk}, cow::Cow, day::Int, islactating::Bool)
     if islactating
-        y = 0.
+        y = 0.0
         for i = 1:3
             y += cow.vetheraniamb[i] * exp(day * cow.vetheraniamc[i])
         end
@@ -196,7 +196,7 @@ output: MJ/day
 function energy(::Type{Pregnancy}, cow::Cow, t::Int)
     dp = t - cow.conceptiondate
     if dp < 1
-        return 0.
+        return 0.0
     else
         a = 0.025 * cow.calfbirthweight^2
         b = 10^(151.665 - 151.64 * exp(-5.76e-5 * dp))
@@ -207,7 +207,7 @@ end
 function changeliveweight(::Type{Pregnancy}, cow::Cow, t::Int)
     dp = t - cow.conceptiondate
     if dp < 1
-        return 0.
+        return 0.0
     else
         return cow.calfbirthweight * (18.28 * 0.02 - 0.0000286 * dp) * exp(0.02 * dp - 0.0000143 * dp^2) / 1000
     end
@@ -235,7 +235,7 @@ function getenergy(::Type{Milk}, cow, day, islactating)
     if islactating
         return cow.max_milk_energy[day]
     else
-        return 0.
+        return 0.0
     end
 end
 
@@ -296,11 +296,11 @@ function changeliveweight(::Type{Lipid}, cow::Cow, t::Int)
     # Daily change in lipid mass (kg)
 
     max_lipid_loss = -1.75
-    t_prime = 112.
+    t_prime = 112.0
 
     # Empty weight of cow
     # empty_weight = cow.constants.LW0 * (1 - 0.1113 / (1 - 0.129 * cow.constants.BCS0))
-    BCSstandard = 5
+    BCSstandard = 5.0
     LWatBCSstandard = cow.initialliveweight / (1 - 0.129 * (BCSstandard - cow.initialbcs))
     kgLWperBCS = 0.129 * LWatBCSstandard
     LWatBCS3 = LWatBCSstandard - 2 * kgLWperBCS
@@ -359,7 +359,7 @@ function changeliveweight(::Type{Lipid}, cow::Cow, t::Int)
         return change_at_calving * (1 - t / t_prime)
     elseif t_prime < t && t < cow.conceptiondate
         # Day is after T' but still not pregnant so no drive for lipid change
-        return 0.
+        return 0.0
     else
         # Cow driven to reach next_calving body lipid by next calving
         return 2 * (next_calving - prime) * (t - cow.conceptiondate) / cow.gestationlength^2
